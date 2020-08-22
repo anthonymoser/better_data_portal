@@ -68,7 +68,7 @@ def main():
     final_results.markdown(lines, unsafe_allow_html=True)
 
 
-def initialize_socrata(data_portal_url, app_token):
+def initialize_socrata(data_portal_url, app_token = None):
     client = Socrata(data_portal_url, app_token)
     ds = client.datasets()
     return client, ds
@@ -120,9 +120,9 @@ def get_table_download_link(df, download_filename, link_text="CSV"):
     href = f'<a href="data:file/csv;base64,{b64}" download="{download_filename}">{link_text}</a>'
     return href
 
-
-st.title('Whatcha Got')
-st.write('Keyword search for Socrata data portals')
+app_token = None
+st.title('Better Data Portal')
+st.write('Keyword search across data sets for Socrata data portals')
 data_portal_url = st.sidebar.text_input("Data Portal URL", value='data.cityofchicago.org')
 
 client, ds = initialize_socrata(data_portal_url, app_token)
