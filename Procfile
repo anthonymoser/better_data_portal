@@ -1,1 +1,1 @@
-web: sh setup.sh && streamlit run your_app.py
+web: sh setup.sh && streamlit run better_data_portal.py
