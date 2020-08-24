@@ -12,10 +12,10 @@ def main():
     descriptions = {}
     description_buttons = {}
 
-    for counter, dataset in enumerate(set_names, 1):
-        bar.progress(counter / len(set_names))
+    for counter, dataset in enumerate(selected_sets, 1):
+        bar.progress(counter / len(selected_sets))
         # For each data set, get the resource id and reset the dataframe
-        resource = resource_ids.get(dataset)
+        resource = selected_sets[dataset]
         kf = None
 
         current_search.markdown(f'Currently searching: {dataset}')
@@ -47,7 +47,7 @@ def main():
             st.markdown(f'### {dataset}')
             st.table(results_table)
             unique, kf = remove_duplicates(kf)
-            filename = dataset.replace('/', '_') + '.csv'
+            filename = str(dataset).replace('/', '_') + '.csv'
             link = get_table_download_link(kf, filename)
             msg = f"{unique} unique records. {link}"
             hits[dataset] = {
@@ -74,13 +74,14 @@ def initialize_socrata(data_portal_url, app_token = None):
     return client, ds
 
 
-def get_sets(ds):
-    set_names = [d['resource']['name'] for d in ds]
-    set_names.sort()
+def is_map(resource):
+    return 1 if resource['type'] == 'map' else 0
 
-    resource_ids = {d['resource']['name']: d['resource']['id'] for d in ds}
+
+def get_sets(ds):
+    resource_ids = {d['resource']['name']: d['resource']['id'] for d in ds if is_map(d['resource']) == 0}
     sets = {d['resource']['id']: d['resource'] for d in ds}
-    return set_names, resource_ids, sets
+    return resource_ids, sets
 
 
 def describe_set(id:str) ->dict:
@@ -120,13 +121,47 @@ def get_table_download_link(df, download_filename, link_text="CSV"):
     href = f'<a href="data:file/csv;base64,{b64}" download="{download_filename}">{link_text}</a>'
     return href
 
+
+@st.cache
+def group_sets(datasets: dict):
+    groups = {}
+    for d in datasets:
+        group = d.split(' - ')[0]
+        if group in groups:
+            groups[group][d] = datasets[d]
+        else:
+            groups[group] = {d: datasets[d]}
+
+    combined = {}
+    # Single sets should not be nested
+    for g in groups:
+        if len(groups[g]) > 1:
+            combined[g] = groups[g]
+        if len(groups[g]) == 1:
+            combined.update(groups[g])
+
+    sorted_sets = {k: combined[k] for k in sorted(combined)}
+    return sorted_sets
+
+
 app_token = None
 st.title('Better Data Portal')
 st.write('Keyword search across data sets for Socrata data portals')
+top_box = st.empty()
+
+about = st.sidebar.button('ABOUT THIS PORTAL')
+f = open("about.md", "r")
+about_text = f.read()
+if about:
+    top_box.markdown(about_text)
+
 data_portal_url = st.sidebar.text_input("Data Portal URL", value='data.cityofchicago.org')
 
 client, ds = initialize_socrata(data_portal_url, app_token)
-set_names, resource_ids, sets = get_sets(ds)
+resource_ids, sets = get_sets(ds)
+sorted_sets = group_sets(resource_ids)
+selected_sets = resource_ids.copy()
+
 
 # Split the keywords on line breaks and wrap each line in quotes to treat it as a whole phrase
 search_terms = st.sidebar.text_area("List keywords, phrases or addresses - one per line")
@@ -136,15 +171,26 @@ keywords = [f'"{k}"' for k in keywords]
 start_search = st.sidebar.button('SEARCH')
 stop_search = st.sidebar.button('STOP')
 search_all = st.sidebar.checkbox('Search all data sets', value=True)
+st.sidebar.markdown('*Maps are excluded because they are not keyword searchable.*')
 
 if not search_all:
+    selected_sets = {}
     available_sets = {}
-    for counter, value in enumerate(set_names):
-        available_sets[value] = st.sidebar.checkbox(value, False, counter)
+    for counter, value in enumerate(sorted_sets):
+        label = f"{value} ({len(sorted_sets[value])} sets) " if type(sorted_sets[value]) == dict else value
+        available_sets[value] = st.sidebar.checkbox(label, False, counter)
 
-    set_names = [a for a in available_sets if available_sets[a] is True]
+    for a in available_sets:
+        if type(sorted_sets[a]) == dict and available_sets[a] is True:
+            group = sorted_sets[a]
+            selected_sets.update(group)
+        else:
+            if available_sets[a] is True:
+                selected_sets[a] = sorted_sets[a]
+
+    # selected_sets = [a for a in available_sets if available_sets[a] is True]
     st.write("Selected data sets")
-    st.write(set_names)
+    st.write(selected_sets)
 
 hits = {}
 current_search = st.empty()
@@ -154,4 +200,5 @@ if stop_search:
     st.write('Search halted.')
 
 if start_search:
+    top_box.empty()
     main()
