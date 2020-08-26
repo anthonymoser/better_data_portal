@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 from sodapy import Socrata
 import base64
-
+import os
 
 def main():
 
@@ -80,6 +80,7 @@ def is_map(resource):
 
 def get_sets(ds):
     resource_ids = {d['resource']['name']: d['resource']['id'] for d in ds if is_map(d['resource']) == 0}
+    resource_ids = {k: resource_ids[k] for k in sorted(resource_ids)}
     sets = {d['resource']['id']: d['resource'] for d in ds}
     return resource_ids, sets
 
@@ -143,8 +144,11 @@ def group_sets(datasets: dict):
     sorted_sets = {k: combined[k] for k in sorted(combined)}
     return sorted_sets
 
+try:
+    app_token = os.environ['S3_SECRET']
+except Exception:
+    app_token = None
 
-app_token = None
 st.title('Better Data Portal')
 st.write('Keyword search across data sets for Socrata data portals')
 top_box = st.empty()
