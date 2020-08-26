@@ -161,16 +161,15 @@ if about:
 
 data_portal_url = st.sidebar.text_input("Data Portal URL", value='data.cityofchicago.org')
 
-client, ds = initialize_socrata(data_portal_url, app_token)
-resource_ids, sets = get_sets(ds)
-sorted_sets = group_sets(resource_ids)
-selected_sets = resource_ids.copy()
-
-
 # Split the keywords on line breaks and wrap each line in quotes to treat it as a whole phrase
 search_terms = st.sidebar.text_area("List keywords, phrases or addresses - one per line")
 keywords = search_terms.split('\n')
 keywords = [f'"{k}"' for k in keywords]
+
+client, ds = initialize_socrata(data_portal_url, app_token)
+resource_ids, sets = get_sets(ds)
+sorted_sets = group_sets(resource_ids)
+selected_sets = resource_ids.copy()
 
 start_search = st.sidebar.button('SEARCH')
 stop_search = st.sidebar.button('STOP')
