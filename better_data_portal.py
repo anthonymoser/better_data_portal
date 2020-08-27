@@ -149,6 +149,13 @@ try:
 except Exception:
     app_token = None
 
+st.beta_set_page_config(
+    layout="wide",  # Can be "centered" or "wide". In the future also "dashboard", etc.
+    initial_sidebar_state="expanded",  # Can be "auto", "expanded", "collapsed"
+    page_title='Better Data Portal',  # String or None. Strings get appended with "• Streamlit".
+    page_icon=None,  # String, anything supported by st.image, or None.
+)
+
 st.title('Better Data Portal')
 st.write('Keyword search across data sets for Socrata data portals')
 top_box = st.empty()
