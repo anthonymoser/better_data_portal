@@ -102,7 +102,7 @@ def describe_set(id:str) ->dict:
         "Resource_id": id,
         "Last Updated": sets[id]['updatedAt'],
         "Description": sets[id]['description'],
-        "Columns": list(zip(sets[id]['columns_field_name'], sets[id]['columns_datatype']))
+        "Columns": dict(zip(sets[id]['columns_field_name'], sets[id]['columns_datatype']))
     }
     return set
 
