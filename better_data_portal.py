@@ -3,6 +3,7 @@ import streamlit as st
 from sodapy import Socrata
 import base64
 import os
+import requests
 
 def main():
 
@@ -68,17 +69,27 @@ def main():
     final_results.markdown(lines, unsafe_allow_html=True)
 
 
-def initialize_socrata(data_portal_url, app_token = None):
+def initialize_socrata(data_portal_url, app_token = None)->tuple:
     client = Socrata(data_portal_url, app_token)
     ds = client.datasets()
     return client, ds
 
 
-def is_map(resource):
+def get_data_portals()->list:
+    st.write('Just copy and paste the URL into the "Data Portal URL" box and start searching. To quickly find a data portal on this page, use Ctrl+F or Command+F.')
+    st.write('Data Portal URL : Number of Data Sets')
+    response = requests.get('http://api.us.socrata.com/api/catalog/v1/domains')
+    results = response.json()['results']
+    data_portals = {r['domain']: r['count'] for r in sorted( results, key=lambda item: item['domain']) if r['count'] > 0}
+    st.write(f'{len(data_portals)} data portals available.')
+    st.write(data_portals)
+
+
+def is_map(resource)->int:
     return 1 if resource['type'] == 'map' else 0
 
 
-def get_sets(ds):
+def get_sets(ds)->tuple:
     resource_ids = {d['resource']['name']: d['resource']['id'] for d in ds if is_map(d['resource']) == 0}
     resource_ids = {k: resource_ids[k] for k in sorted(resource_ids)}
     sets = {d['resource']['id']: d['resource'] for d in ds}
@@ -160,11 +171,16 @@ st.title('Better Data Portal')
 st.write('Keyword search across data sets for Socrata data portals')
 top_box = st.empty()
 
-about = st.sidebar.button('ABOUT THIS PORTAL')
+about = st.sidebar.button('ABOUT THIS SITE')
+find_portals = st.sidebar.button('FIND OTHER DATA PORTALS')
+
 f = open("about.md", "r")
 about_text = f.read()
 if about:
     top_box.markdown(about_text)
+
+if find_portals:
+    get_data_portals()
 
 data_portal_url = st.sidebar.text_input("Data Portal URL", value='data.cityofchicago.org')
 
@@ -198,9 +214,13 @@ if not search_all:
             if available_sets[a] is True:
                 selected_sets[a] = sorted_sets[a]
 
-    # selected_sets = [a for a in available_sets if available_sets[a] is True]
     st.write("Selected data sets")
     st.write(selected_sets)
+    describe = st.button('Describe selected data sets')
+    if describe:
+        for s in selected_sets:
+            st.write(describe_set(selected_sets[s]))
+
 
 hits = {}
 current_search = st.empty()
