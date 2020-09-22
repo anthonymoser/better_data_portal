@@ -6,7 +6,8 @@ It's a fairly simple Python app that uses sodapy to access the data portal and S
 
 
 ### Notes on usage
-1. **Maps are excluded.** The app automatically excludes data sets that are categorized as maps, because keyword search doesn't work on maps.
+1. **Maps and "derived views" are excluded.** The app automatically excludes data sets that are categorized as maps, because keyword search doesn't work on maps.
+It also excludes "derived views" because they're just filtered copies of a full data set that will still be searched. For example, "Current Employee Names, Salaries And Positions - Full Time" is just a subset of "Current Employee Names, Salaries And Positions." 
 2. **You may get some partial matches.** Keywords are automatically treated as having quotes around them (e.g. My Search will be treated as "My Search").
 Despite this, some data sets will include partial matches, which can be false positives. For example, a search
  for "4010 S Damen" returns Divvy bike rides with the user_id "4010".  
@@ -25,4 +26,4 @@ To avoid accidentally excluding results, "2055 W Pershing" is better than "2055 
 Many Socrata powered datasets can be found at <http://www.opendatanetwork.com> Just search for the place or topic and
 look for the "datasets" results.
 
-  
+

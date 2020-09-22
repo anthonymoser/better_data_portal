@@ -46,18 +46,19 @@ def main():
 
         if kf is not None:
             st.markdown(f'### {dataset}')
-            st.table(results_table)
             unique, kf = remove_duplicates(kf)
             filename = str(dataset).replace('/', '_') + '.csv'
             link = get_table_download_link(kf, filename)
-            msg = f"{unique} unique records. {link}"
+            msg = f"{unique} unique records. {link} ([Source info](https://{data_portal_url}/d/{resource}))"
+
             hits[dataset] = {
                 "unique": unique,
                 "link": link,
                 "description": describe_set(resource_ids.get(dataset))
             }
-            kf
             st.markdown(msg, unsafe_allow_html=True)
+            st.table(results_table)
+            kf
 
     current_search.markdown('Search complete.')
     bar.markdown(' --- ')
@@ -90,7 +91,13 @@ def is_map(resource)->int:
 
 
 def get_sets(ds)->tuple:
-    resource_ids = {d['resource']['name']: d['resource']['id'] for d in ds if is_map(d['resource']) == 0}
+
+    # Filter out maps (not keyword searchable) and derived data sets (since they are just a subset of another data set)
+    resource_ids = { d['resource']['name']: d['resource']['id']
+                     for d in ds
+                     if is_map(d['resource']) == 0
+                     and not d['resource']['parent_fxf']}
+
     resource_ids = {k: resource_ids[k] for k in sorted(resource_ids)}
     sets = {d['resource']['id']: d['resource'] for d in ds}
     return resource_ids, sets
@@ -197,11 +204,13 @@ selected_sets = resource_ids.copy()
 start_search = st.sidebar.button('SEARCH')
 stop_search = st.sidebar.button('STOP')
 search_all = st.sidebar.checkbox('Search all data sets', value=True)
-st.sidebar.markdown('*Maps are excluded because they are not keyword searchable.*')
+st.sidebar.markdown('*Some data sets are excluded - click About This Site for more.*')
 
 if not search_all:
+
     selected_sets = {}
     available_sets = {}
+
     for counter, value in enumerate(sorted_sets):
         label = f"{value} ({len(sorted_sets[value])} sets) " if type(sorted_sets[value]) == dict else value
         available_sets[value] = st.sidebar.checkbox(label, False, counter)
