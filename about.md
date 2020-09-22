@@ -6,8 +6,8 @@ It's a fairly simple Python app that uses sodapy to access the data portal and S
 
 
 ### Notes on usage
-1. **Maps and "derived views" are excluded.** The app automatically excludes data sets that are categorized as maps, because keyword search doesn't work on maps.
-It also excludes "derived views" because they're just filtered copies of a full data set that will still be searched. For example, "Current Employee Names, Salaries And Positions - Full Time" is just a subset of "Current Employee Names, Salaries And Positions." 
+1. **Maps and "derived views" are excluded by default.** The app automatically excludes data sets that are categorized as maps, because keyword search doesn't work on maps.
+It also excludes "derived views" because they're just filtered copies of a full data set that will still be searched. For example, "Current Employee Names, Salaries And Positions - Full Time" is just a subset of "Current Employee Names, Salaries And Positions." To include these (or see them in the list of available data sets), check "Include subsets" 
 2. **You may get some partial matches.** Keywords are automatically treated as having quotes around them (e.g. My Search will be treated as "My Search").
 Despite this, some data sets will include partial matches, which can be false positives. For example, a search
  for "4010 S Damen" returns Divvy bike rides with the user_id "4010".  
