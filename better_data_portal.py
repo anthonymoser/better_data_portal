@@ -93,10 +93,15 @@ def is_map(resource)->int:
 def get_sets(ds)->tuple:
 
     # Filter out maps (not keyword searchable) and derived data sets (since they are just a subset of another data set)
-    resource_ids = { d['resource']['name']: d['resource']['id']
-                     for d in ds
-                     if is_map(d['resource']) == 0
-                     and not d['resource']['parent_fxf']}
+    if include_subsets:
+        resource_ids = {d['resource']['name']: d['resource']['id']
+                        for d in ds
+                        if is_map(d['resource']) == 0}
+    else:
+        resource_ids = { d['resource']['name']: d['resource']['id']
+                         for d in ds
+                         if is_map(d['resource']) == 0
+                         and not d['resource']['parent_fxf']}
 
     resource_ids = {k: resource_ids[k] for k in sorted(resource_ids)}
     sets = {d['resource']['id']: d['resource'] for d in ds}
@@ -196,21 +201,25 @@ search_terms = st.sidebar.text_area("List keywords, phrases or addresses - one p
 keywords = search_terms.split('\n')
 keywords = [f'"{k}"' for k in keywords]
 
+start_search = st.sidebar.button('SEARCH')
+stop_search = st.sidebar.button('STOP')
+include_subsets = st.sidebar.checkbox('Include subsets', value=False)
+if include_subsets:
+    st.sidebar.markdown('This will include data sets that are filtered subsets of other data being searched.')
+search_all = st.sidebar.checkbox('Search all data sets', value=True)
+
 client, ds = initialize_socrata(data_portal_url, app_token)
 resource_ids, sets = get_sets(ds)
 sorted_sets = group_sets(resource_ids)
 selected_sets = resource_ids.copy()
 
-start_search = st.sidebar.button('SEARCH')
-stop_search = st.sidebar.button('STOP')
-search_all = st.sidebar.checkbox('Search all data sets', value=True)
 st.sidebar.markdown('*Some data sets are excluded - click About This Site for more.*')
 
 if not search_all:
 
     selected_sets = {}
     available_sets = {}
-
+    st.sidebar.text(f'{len(sorted_sets)} data sets.')
     for counter, value in enumerate(sorted_sets):
         label = f"{value} ({len(sorted_sets[value])} sets) " if type(sorted_sets[value]) == dict else value
         available_sets[value] = st.sidebar.checkbox(label, False, counter)
