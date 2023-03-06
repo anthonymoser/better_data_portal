@@ -69,13 +69,12 @@ def main():
 
     final_results.markdown(lines, unsafe_allow_html=True)
 
-
-def initialize_socrata(data_portal_url, app_token = None)->tuple:
+@st.cache_resource
+def initialize_socrata(data_portal_url, app_token = None):
     client = Socrata(data_portal_url, app_token)
-    ds = client.datasets()
-    return client, ds
+    return client
 
-
+@st.cache_data
 def get_data_portals()->list:
     st.write('Just copy and paste the URL into the "Data Portal URL" box and start searching. To quickly find a data portal on this page, use Ctrl+F or Command+F.')
     st.write('Data Portal URL : Number of Data Sets')
@@ -89,9 +88,8 @@ def get_data_portals()->list:
 def is_map(resource)->int:
     return 1 if resource['type'] == 'map' else 0
 
-
-def get_sets(ds)->tuple:
-
+@st.cache_data
+def get_resource_ids(ds, data_portal_url)->dict:
     # Filter out maps (not keyword searchable) and derived data sets (since they are just a subset of another data set)
     if include_subsets:
         resource_ids = {d['resource']['name']: d['resource']['id']
@@ -104,8 +102,7 @@ def get_sets(ds)->tuple:
                          and not d['resource']['parent_fxf']}
 
     resource_ids = {k: resource_ids[k] for k in sorted(resource_ids)}
-    sets = {d['resource']['id']: d['resource'] for d in ds}
-    return resource_ids, sets
+    return resource_ids
 
 
 def describe_set(id:str) ->dict:
@@ -146,8 +143,8 @@ def get_table_download_link(df, download_filename, link_text="CSV"):
     return href
 
 
-@st.cache
-def group_sets(datasets: dict):
+@st.cache_data
+def group_sets(datasets: dict, data_portal_url):
     groups = {}
     for d in datasets:
         group = d.split(' - ')[0]
@@ -167,6 +164,31 @@ def group_sets(datasets: dict):
     sorted_sets = {k: combined[k] for k in sorted(combined)}
     return sorted_sets
 
+@st.cache_resource
+def get_set_list(sets):
+    rows = []
+    for id in sets:
+        s = sets[id]
+        if s['type'] == "dataset":
+            row = {
+                'selected': False,
+                'name':s['name'],
+                'description': s['description'],
+                'updated_at': s['updatedAt'],
+                'columns_name': s['columns_name'],
+                'id': s, 
+                'link': f"https://{data_portal_url}/d/{id}", 
+                'download_dataset': f'https://{data_portal_url}/api/views/{id}/rows.csv?accessType=DOWNLOAD'
+            }
+            rows.append(row)
+    return pd.DataFrame(rows).sort_values('name')
+
+@st.cache_data
+def get_ds(_client, data_portal_url):
+    return _client.datasets()
+
+    
+############## GLOBAL LOGIC #################
 try:
     app_token = os.environ['S3_SECRET']
 except Exception:
@@ -194,6 +216,7 @@ if about:
 if find_portals:
     get_data_portals()
 
+
 data_portal_url = st.sidebar.text_input("Data Portal URL", value='data.cityofchicago.org')
 
 # Split the keywords on line breaks and wrap each line in quotes to treat it as a whole phrase
@@ -208,36 +231,29 @@ if include_subsets:
     st.sidebar.markdown('This will include data sets that are filtered subsets of other data being searched.')
 search_all = st.sidebar.checkbox('Search all data sets', value=True)
 
-client, ds = initialize_socrata(data_portal_url, app_token)
-resource_ids, sets = get_sets(ds)
-sorted_sets = group_sets(resource_ids)
+client = initialize_socrata(data_portal_url, app_token)
+
+ds = get_ds(client, data_portal_url)
+resource_ids = get_resource_ids(ds, data_portal_url)
+
+sets = {d['resource']['id']: d['resource'] for d in ds}
+set_list = get_set_list(sets)
+sorted_sets = group_sets(resource_ids, data_portal_url)
 selected_sets = resource_ids.copy()
 
 st.sidebar.markdown('*Some data sets are excluded - click About This Site for more.*')
+selections_list = st.sidebar.empty()
 
 if not search_all:
-
-    selected_sets = {}
-    available_sets = {}
-    st.sidebar.text(f'{len(sorted_sets)} data sets.')
-    for counter, value in enumerate(sorted_sets):
-        label = f"{value} ({len(sorted_sets[value])} sets) " if type(sorted_sets[value]) == dict else value
-        available_sets[value] = st.sidebar.checkbox(label, False, counter)
-
-    for a in available_sets:
-        if type(sorted_sets[a]) == dict and available_sets[a] is True:
-            group = sorted_sets[a]
-            selected_sets.update(group)
-        else:
-            if available_sets[a] is True:
-                selected_sets[a] = sorted_sets[a]
-
-    st.write("Selected data sets")
-    st.write(selected_sets)
-    describe = st.button('Describe selected data sets')
-    if describe:
-        for s in selected_sets:
-            st.write(describe_set(selected_sets[s]))
+    ds_filter = st.text_input('Enter text to filter the data sets')
+    if ds_filter:
+        filtered = set_list.pipe(lambda df: df[df.name.str.contains(ds_filter)])
+    else:
+        filtered = set_list.copy()
+    edited_df = st.experimental_data_editor(filtered)
+    checked_boxes = list(edited_df.pipe(lambda df: df[df.selected]).name)
+    selections_list.table(checked_boxes)
+    selected_sets = {set_name:selected_sets[set_name] for set_name in selected_sets if set_name in checked_boxes}
 
 
 hits = {}
