@@ -82,27 +82,7 @@ def get_data_portals()->list:
     results = response.json()['results']
     data_portals = {r['domain']: r['count'] for r in sorted( results, key=lambda item: item['domain']) if r['count'] > 0}
     st.write(f'{len(data_portals)} data portals available.')
-    st.write(data_portals)
-
-
-def is_map(resource)->int:
-    return 1 if resource['type'] == 'map' else 0
-
-@st.cache_data
-def get_resource_ids(ds, data_portal_url)->dict:
-    # Filter out maps (not keyword searchable) and derived data sets (since they are just a subset of another data set)
-    if include_subsets:
-        resource_ids = {d['resource']['name']: d['resource']['id']
-                        for d in ds
-                        if is_map(d['resource']) == 0}
-    else:
-        resource_ids = { d['resource']['name']: d['resource']['id']
-                         for d in ds
-                         if is_map(d['resource']) == 0
-                         and not d['resource']['parent_fxf']}
-
-    resource_ids = {k: resource_ids[k] for k in sorted(resource_ids)}
-    return resource_ids
+    st.dataframe(pd.DataFrame(results).sort_values('count', ascending=False))
 
 
 def describe_set(id:str) ->dict:
@@ -143,51 +123,26 @@ def get_table_download_link(df, download_filename, link_text="CSV"):
     return href
 
 
-@st.cache_data
-def group_sets(datasets: dict, data_portal_url):
-    groups = {}
-    for d in datasets:
-        group = d.split(' - ')[0]
-        if group in groups:
-            groups[group][d] = datasets[d]
-        else:
-            groups[group] = {d: datasets[d]}
-
-    combined = {}
-    # Single sets should not be nested
-    for g in groups:
-        if len(groups[g]) > 1:
-            combined[g] = groups[g]
-        if len(groups[g]) == 1:
-            combined.update(groups[g])
-
-    sorted_sets = {k: combined[k] for k in sorted(combined)}
-    return sorted_sets
-
-@st.cache_resource
-def get_set_list(sets):
-    rows = []
-    for id in sets:
-        s = sets[id]
-        if s['type'] == "dataset":
-            row = {
-                'selected': False,
-                'name':s['name'],
-                'description': s['description'],
-                'updated_at': s['updatedAt'],
-                'columns_name': s['columns_name'],
-                'id': s, 
-                'link': f"https://{data_portal_url}/d/{id}", 
-                'download_dataset': f'https://{data_portal_url}/api/views/{id}/rows.csv?accessType=DOWNLOAD'
-            }
-            rows.append(row)
-    return pd.DataFrame(rows).sort_values('name')
+def get_resources(url, limit, offset):
+    response = requests.get(f"http://api.us.socrata.com/api/catalog/v1?domains={url}&only=datasets&derived=false&limit={limit}&offset={offset}")
+    return response.json()['results']
 
 @st.cache_data
-def get_ds(_client, data_portal_url):
-    return _client.datasets()
+def get_datasets(data_portal_url):
+    datasets = []
+    resources = None
+    limit = 100
+    offset = 0
+    page = 1
+    while resources is None or len(resources) == limit:
+        print(page)
+        resources = get_resources(data_portal_url, limit, offset)
+        datasets += resources 
+        offset += limit
+        page += 1 
+    return datasets
 
-    
+
 ############## GLOBAL LOGIC #################
 try:
     app_token = os.environ['S3_SECRET']
@@ -217,7 +172,14 @@ if find_portals:
     get_data_portals()
 
 
-data_portal_url = st.sidebar.text_input("Data Portal URL", value='data.cityofchicago.org')
+url_params = st.experimental_get_query_params()
+
+if 'portal_url' in url_params.keys():
+    portal_url = url_params['portal_url'][0]
+else:
+    portal_url = 'data.cityofchicago.org'
+    
+data_portal_url = st.sidebar.text_input("Data Portal URL", value=portal_url)
 
 # Split the keywords on line breaks and wrap each line in quotes to treat it as a whole phrase
 search_terms = st.sidebar.text_area("List keywords, phrases or addresses - one per line")
@@ -226,20 +188,26 @@ keywords = [f'"{k}"' for k in keywords]
 
 start_search = st.sidebar.button('SEARCH')
 stop_search = st.sidebar.button('STOP')
-include_subsets = st.sidebar.checkbox('Include subsets', value=False)
-if include_subsets:
-    st.sidebar.markdown('This will include data sets that are filtered subsets of other data being searched.')
 search_all = st.sidebar.checkbox('Search all data sets', value=True)
 
 client = initialize_socrata(data_portal_url, app_token)
-
-ds = get_ds(client, data_portal_url)
-resource_ids = get_resource_ids(ds, data_portal_url)
+ds = get_datasets(data_portal_url)
+resource_ids = {d['resource']['name']: d['resource']['id'] for d in ds}
+selected_sets = resource_ids.copy()
 
 sets = {d['resource']['id']: d['resource'] for d in ds}
-set_list = get_set_list(sets)
-sorted_sets = group_sets(resource_ids, data_portal_url)
-selected_sets = resource_ids.copy()
+set_list = pd.DataFrame([
+        {
+            'selected': False,
+            'name':sets[id]['name'],
+            'description': sets[id]['description'],
+            'updated_at': sets[id]['updatedAt'],
+            'columns_name': sets[id]['columns_name'],
+            'id': sets[id]['id'], 
+            'link': f"https://{data_portal_url}/d/{id}", 
+            'download_dataset': f'https://{data_portal_url}/api/views/{id}/rows.csv?accessType=DOWNLOAD'
+        } for id in sets
+    ]).sort_values('name')
 
 st.sidebar.markdown('*Some data sets are excluded - click About This Site for more.*')
 selections_list = st.sidebar.empty()
@@ -254,7 +222,6 @@ if not search_all:
     checked_boxes = list(edited_df.pipe(lambda df: df[df.selected]).name)
     selections_list.table(checked_boxes)
     selected_sets = {set_name:selected_sets[set_name] for set_name in selected_sets if set_name in checked_boxes}
-
 
 hits = {}
 current_search = st.empty()
